@@ -1,0 +1,19 @@
+parameters:
+  name: {}
+  filename: {}
+  params: {}
+
+steps:
+- ${{if parameters.filename}}:
+  - task: DownloadBuildArtifacts@0
+    displayName: "Downloading Artifacts"
+    inputs:
+      buildType: 'specific'
+      buildVersionToDownload: 'specific'
+      buildId: $(resources.pipeline.sourcepipeline.runId)
+      downloadType: 'single'
+      artifactName: 'drop/$(API_Name)'
+      # branchName: '$(BranchName)'
+      downloadPath: '$(System.ArtifactsDirectory)'
+      definition: '$(BuildPipeline)'
+      project: '$(System.TeamProject)'
