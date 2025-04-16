@@ -1,0 +1,186 @@
+name: $(BuildDefinitionName)_$(SourceBranchName)_$(date:yyyyMMdd)$(rev:.r)
+
+trigger: 
+  branches:
+    include:
+    - develop
+
+  paths:
+    include:
+    - logicappupgrade
+ 
+pool:
+  name: AzureICCAgentPool  
+
+variables:
+- group: LogicAppSettingUpsert_NPE
+- group: CommonVariables_Dev
+- name: rgName
+  value: $(rgNameLA)
+- name: API_Name
+  value: upsertLASettings
+- name: BuildConfiguration
+  value: Release
+- name: VSTS_ARM_REST_IGNORE_SSL_ERRORS 
+  value: true
+- name: System.Debug
+  value: true
+
+parameters:
+- name: listOfAPIs
+  type: object
+  default:
+  - key: "api-master-azuredeploy"
+    params: >-
+      -keyVaultName "$(KVName)"
+      -serviceBusNamespace "$(serviceBusNamespaceName)"
+      -serviceBusTopicName "$(ServiceBusTopicName)"
+      -API_Provider_AppId "$(AppRegistrationAppId)"
+      -API_Provider_Role "ICCWebhook.Writer"      
+    apimApiName: "ICC-Events-Webhook"
+
+- name: listOfStandardLogicApps
+  type: object
+  default:
+  - key: "LogicApp-Upgrade-azuredeploy"
+    stdlogicAppNameDir: "stdLogicAppUpgrade"
+    params: >-
+      -logicAppName "$(logicAppName)"
+      -appServicePlanName "$(appServicePlanName)"
+      -storageConnectionString "$(storageConnectionString)"
+      -AlertCc "$(AlertCc)"
+      -AlertFrom "$(AlertFrom)"
+      -AlertTo "$(AlertTo)"
+      -KVPathPROD "$(KVPathPROD)"
+      -apimAlertURI "$(apimAlertURI)"
+      -subscriptionID "$(subscriptionID)"
+      -environmentName "$(environmentName)"
+      -rgName "$(rgNameLA)"
+      -workspaceID "$(workspaceID)"
+      -subscriptionName "$(subscriptionName)"
+      -AINConnectionString "$(AINConnectionString)"
+      -AlertSubjectCertificate "$(AlertSubjectCertificate)"
+      -Environment "$(Environment)"
+      -apimAlertURLCertificate "$(apimAlertURLCertificate)"
+      -ASEName "$(ASEName)"
+      -alertSubjectAINv2 "$(alertSubjectAINv2)"
+      -maxUpdate "$(maxUpdate)"
+      -maxUpdateCert "$(maxUpdateCert)"
+      -KVPath "$(KVPath)"
+      -AINInstrumentationKey "$(AINInstrumentationKey)"
+      -oldCertThumbprint1 "$(oldCertThumbprint1)"
+      -oldCertThumbprint2 "$(oldCertThumbprint2)"
+      -oldCertThumbprint3 "$(oldCertThumbprint3)"
+      -newCertThumbprint "$(newCertThumbprint)"
+      -iccWebsiteChangeEventsTopicName "$(ServiceBusTopicName)"
+      -processWebsiteChangeEventsTopicSubscriptionName "$(EventsTopicSubscriptionName)"
+      -processAppSettingUpdateActionsTopicSubscriptionName "$(ActionsTopicSubscriptionName)"
+      -processAppSettingSendNotificationsTopicSubscriptionName "$(NotificationsTopicSubscriptionName)"
+      -serviceBusResourceGroupName "$(resourceGroupCommon)"
+      -serviceBusNamespace "$(serviceBusNamespaceName)"
+      -KVName "$(KVName)"
+      -AlertApiClientIdKey "$(KeyVaultAlertsEmailClientIdKey)"
+      -AlertApiClientSecretKey "$(KeyVaultAlertsEmailClientSecretKey)"
+      -AlertApiSubscriptionKeyKey "$(KeyVaultAlertsEmailSubscriptionKeyKey)"
+      -storageConnectionStringKey "$(KeyVaultStorageConnectionStringKey)"
+      -processAppSettingEventsTopicSubscriptionName "$(AppSettingChangeEventsTopicSubscriptionName)"
+      -disabledWorkflowAlertRunbookWebhook "$(disabledWorkflowAlertRunbookWebhook)"
+
+- name: StandardLogicAppWorkflows
+  type: object
+  default:
+  - key: "Upsert-LASettings-wf"
+    stdlogicAppNameDir: "stdLogicAppUpgrade"
+    appName: '$(logicAppName)'
+
+- name: listOfServiceBusTopics
+  type: object
+  default:
+  - key: "ServiceBusTopics"
+    params: >-
+      -serviceBusNamespaceName "$(serviceBusNamespaceName)"
+      -serviceBusTopicName "$(ServiceBusTopicName)"
+      -lockDuration "$(ServiceBusLockDuration)"
+      -serviceBusEventsTopicSubscriptionName "$(EventsTopicSubscriptionName)"
+      -serviceBusEventsTopicSubscriptionSqlFilter "$(EventsTopicSubscriptionSqlFilter)"
+      -serviceBusActionsTopicSubscriptionName "$(ActionsTopicSubscriptionName)"
+      -serviceBusActionsTopicSubscriptionSqlFilter "$(ActionsTopicSubscriptionSqlFilter)"
+      -serviceBusNotificationsTopicSubscriptionName "$(NotificationsTopicSubscriptionName)"
+      -serviceBusNotificationsTopicSubscriptionSqlFilter "$(NotificationsTopicSubscriptionSqlFilter)"
+      -serviceBusAppSettingEventsTopicSubscriptionName "$(AppSettingChangeEventsTopicSubscriptionName)"
+      -serviceBusAppSettingEventsTopicSubscriptionSqlFilter "$(AppSettingChangeEventsTopicSubscriptionSqlFilter)"
+
+- name: listOfKeyVaults
+  type: object
+  default:
+   - key: "keyVault"
+     params: 
+       -rgName "$(KVRGName)"
+       -kvName "$(KVName)"
+       -logicAppName "$(logicAppName)"
+       -utilityAlertsEmailClientIdValue "$(utilityAlertsEmailClientId)"
+       -utilityAlertsEmailClientSecretValue "$(utilityAlertsEmailClientSecret)"
+       -utilityAlertsEmailSubscriptionKeyValue "$(utilityAlertsEmailSubscriptionKey)"
+       -utilityAlertsEmailClientIdKey "$(KeyVaultAlertsEmailClientIdKey)"
+       -utilityAlertsEmailClientSecretKey "$(KeyVaultAlertsEmailClientSecretKey)"
+       -utilityAlertsEmailSubscriptionKeyKey "$(KeyVaultAlertsEmailSubscriptionKeyKey)"
+       -storageConnectionStringKey "$(KeyVaultStorageConnectionStringKey)"
+       -storageConnectionStringValue "$(storageConnectionString)"
+
+stages:
+# For Validation
+- stage: Validation_stage
+  displayName: Validation Stage
+  jobs:
+  - job: Validate
+    displayName: Validate
+    steps:
+    - script: echo $(rgNameConnection)
+    - ${{ each value in parameters.listOfServiceBusTopics }}:
+      - template: '..\..\TemplateLibrary\PipelineTasks\servicebusTopicValidation.yml'
+        parameters:
+         name: ${{ value.key }}
+         filename: ${{ value.key }}-azuredeploy
+         params: ${{ value.params }}
+    - ${{ each value in parameters.listOfKeyVaults }}:
+      - template: '..\..\TemplateLibrary\PipelineTasks\keyVaultValidation.yml'
+        parameters:
+          name: ${{ value.key }}
+          filename: ${{ value.key }}-azuredeploy
+          params: ${{ value.params }}
+    - ${{ each value in parameters.listOfAPIs }}:
+      - template: '..\..\Template\Pipelines\apimDeploymentBicepV3.yml'
+        parameters:
+         name: API_${{ value.key }}
+         filename: ${{ value.key }}
+         params: ${{ value.params }}
+         apimApiName: ${{ value.apimApiName }}
+         serviceConnectionName: '$(rgNameConnection)'
+         deploymentMode: 'Validation'
+    - ${{ each value in parameters.listOfStandardLogicApps }}:
+      - template: '..\..\Template\Pipelines\standardlogicAppValidation.yml'
+        parameters:
+          name: standardlogicApp_${{ value.key }}
+          filename: ${{ value.key }}
+          params: ${{ value.params }}
+          stdlogicAppNameDir: ${{ value.stdlogicAppNameDir }}
+    - ${{ each value in parameters.StandardLogicAppWorkflows }}:
+      - template: '..\..\Template\Pipelines\workflowValidation.yml'
+        parameters:
+          name: workflow_${{ value.key }}
+          filename: ${{ value.key }}
+          appname: ${{ value.appname }}
+          stdlogicAppNameDir: ${{ value.stdlogicAppNameDir }}
+    - task: CopyFiles@2
+      displayName: 'Copy Files to: $(Build.ArtifactStagingDirectory)'
+      inputs:
+        SourceFolder: '$(Build.SourcesDirectory)\$(API_Name)'
+        Contents: |
+          **/*
+          !Pipelines/*
+        TargetFolder: '$(Build.ArtifactStagingDirectory)'
+    - task: PublishBuildArtifacts@1
+      displayName: "Publish Artifacts"
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: 'drop/$(API_Name)'
