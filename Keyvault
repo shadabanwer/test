@@ -1,0 +1,21 @@
+parameters:
+  name: {}
+  filename: {}
+  params: {}
+
+steps:
+    
+  - task: AzureResourceManagerTemplateDeployment@3
+    displayName: Deploying_KeyVault_${{ parameters.name }}
+    inputs:
+      deploymentScope: 'Resource Group'
+      azureResourceManagerConnection: '$(rgNameConnection)'
+      subscriptionId: '$(azureSubscriptionId)'
+      action: 'Create Or Update Resource Group'
+      resourceGroupName: '$(iseResourceGroup)'
+      location: '$(resourceGroupLocation)'
+      templateLocation: 'Linked artifact'
+      csmFile: '$(Build.SourcesDirectory)\$(API_Name)\KeyVault\${{ parameters.filename }}.json'
+      csmParametersFile: '$(Build.SourcesDirectory)\$(API_Name)\KeyVault\${{ parameters.filename }}.parameters.json'
+      overrideParameters: '${{ parameters.params }}'
+      deploymentMode: 'Incremental'
